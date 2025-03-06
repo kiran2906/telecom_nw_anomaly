@@ -8,9 +8,10 @@ from sklearn.metrics import classification_report, confusion_matrix
 import plotly.express as px
 import plotly.graph_objs as go
 from plotly.subplots import make_subplots
+import os
 
 # Load the pre-processed data
-df = pd.read_csv("../notebooks/telecom_network_data_with_anomalies.csv")
+df = pd.read_csv(r"./notebooks/telecom_network_data_with_anomalies.csv")
 
 
 # 1. Business impact analysis
@@ -24,6 +25,7 @@ def calculate_business_impact(df):
 
     # Identify anomaly periods
     anomaly_periods = df[df["ensemble_anomaly"] == -1]
+    anomaly_periods["timestamp"] = pd.to_datetime(anomaly_periods["timestamp"])
 
     # Estimate anomaly duration
     anomaly_groups = (
@@ -55,7 +57,7 @@ def generate_maintenance_recommendations(df, anomaly_analysis):
 
     # Traffic Load anomalies
     if (
-        anomaly_analysis["traffic_load_analysis"]
+        anomaly_analysis["traffic_load_anomalies"]
         > anomaly_analysis["total_samples"] * 0.05
     ):
         recommendations.append(
@@ -120,12 +122,13 @@ def create_executive_summary(df, business_impact, maintenance_recommendations):
     
     ## Top Maintenance recommendations
     {char(10).join(maintenance_recommendations)}
+    {maintenance_recommendations}
     
     ## Key Performance Indicators
     - Average Traffic Load: {df['traffic_load_mbps'].mean():.2f} Mbps
     - Average Latency: {df['latency_ms'].mean():.2f} ms
-    - Average Packet Loss: {df['packet_loss_percent'].mean():.2f} % 
-    - Average Connection Success Rate: {df['Connection_success_rate'].mean():.2f}%
+    - Average Packet Loss: {df['packet_loss_pct'].mean():.2f} % 
+    - Average Connection Success Rate: {df['conn_success_rate'].mean():.2f}%
     """
     return summary
 
@@ -158,6 +161,18 @@ def create_interactive_anomaly_dashboard(df):
         go.Scatter(
             x=df["timestamp"],
             y=df["traffic_load_mbps"],
+            mode="lines",
+            name="Traffic Load",
+            line=dict(color="blue"),
+        ),
+        row=1,
+        col=1,
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=anomalies["timestamp"],
+            y=anomalies["traffic_load_mbps"],
             mode="markers",
             name="Anomalies",
             marker=dict(color="red", size=10),
@@ -171,6 +186,43 @@ def create_interactive_anomaly_dashboard(df):
         go.Scatter(
             x=df["timestamp"],
             y=df["latency_ms"],
+            mode="lines",
+            name="Latency (ms)",
+            line=dict(color="purple"),
+        ),
+        row=1,
+        col=2,
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=anomalies["timestamp"],
+            y=anomalies["latency_ms"],
+            mode="markers",
+            name="anomalies",
+            marker=dict(color="red", size=10),
+        ),
+        row=1,
+        col=2,
+    )
+    # Packet loss
+
+    fig.add_trace(
+        go.Scatter(
+            x=df["timestamp"],
+            y=df["packet_loss_pct"],
+            mode="lines",
+            name="Packet Loss (%)",
+            line=dict(color="cyan"),
+        ),
+        row=2,
+        col=1,
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=anomalies["timestamp"],
+            y=anomalies["packet_loss_pct"],
             mode="markers",
             name="Anomalies",
             marker=dict(color="red", size=10),
@@ -179,29 +231,28 @@ def create_interactive_anomaly_dashboard(df):
         col=1,
     )
 
-    # Packet Loss
-    fig.add_trace(
-        go.Scatter(
-            x=df["timestamp"],
-            y=df["packet_loss_pct"],
-            mode="markers",
-            name="Anomalies",
-            marker=dict(color="red", size=10),
-        ),
-        row=1,
-        col=2,
-    )
-
-    # Connection Success Rate
+    # Conn Success rate
     fig.add_trace(
         go.Scatter(
             x=df["timestamp"],
             y=df["conn_success_rate"],
+            mode="lines",
+            name="Conn Success Rate",
+            line=dict(color="green"),
+        ),
+        row=2,
+        col=2,
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=anomalies["timestamp"],
+            y=anomalies["conn_success_rate"],
             mode="markers",
-            nmae="Anomalies",
+            name="Anomalies",
             marker=dict(color="red", size=10),
         ),
-        row=1,
+        row=2,
         col=2,
     )
 
@@ -231,10 +282,10 @@ def main():
         "latency_anomalies": len(
             df[
                 (df["ensemble_anomaly"] == -1)
-                & (df["letency_ms"] > df["latency_ms"].quantile(0.95))
+                & (df["latency_ms"] > df["latency_ms"].quantile(0.95))
             ]
         ),
-        "singal_strength_anomalies": len(
+        "signal_strength_anomalies": len(
             df[
                 (df["ensemble_anomaly"] == -1)
                 & (df["signal_strength_dbm"] > df["signal_strength_dbm"].quantile(0.05))
